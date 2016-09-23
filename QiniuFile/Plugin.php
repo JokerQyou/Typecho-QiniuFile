@@ -9,6 +9,13 @@
  * @date 2014-02-22
  */
 
+// 初始化 SDK
+require_once __DIR__ . '/sdk/autoload.php';
+use Qiniu\Auth;
+use Qiniu\Storage\UploadManager;
+use Qiniu\Storage\BucketManager;
+
+
 class QiniuFile_Plugin implements Typecho_Plugin_Interface
 {
     // 激活插件
@@ -38,8 +45,8 @@ class QiniuFile_Plugin implements Typecho_Plugin_Interface
         $accesskey = new Typecho_Widget_Helper_Form_Element_Text('accesskey', null, null, _t('AccessKey：'));
         $form->addInput($accesskey->addRule('required', _t('AccessKey 不能为空！')));
 
-        $sercetkey = new Typecho_Widget_Helper_Form_Element_Text('sercetkey', null, null, _t('SecretKey：'));
-        $form->addInput($sercetkey->addRule('required', _t('SecretKey 不能为空！')));
+        $secretkey = new Typecho_Widget_Helper_Form_Element_Text('secretkey', null, null, _t('SecretKey：'));
+        $form->addInput($secretkey->addRule('required', _t('SecretKey 不能为空！')));
 
         $domain = new Typecho_Widget_Helper_Form_Element_Text('domain', null, 'http://', _t('绑定域名：'), _t('以 http:// 开头，结尾不要加 / ！'));
         $form->addInput($domain->addRule('required', _t('请填写空间绑定的域名！'))->addRule('url', _t('您输入的域名格式错误！')));
@@ -62,28 +69,16 @@ class QiniuFile_Plugin implements Typecho_Plugin_Interface
     }
 
 
-    // 初始化七牛SDK
-    public static function initSDK($accesskey, $sercetkey)
-    {
-        // 调用 SDK 设置密钥
-        require_once 'sdk/io.php';
-        require_once 'sdk/rs.php';
-        Qiniu_SetKeys($accesskey, $sercetkey);
-    }
-
-
-    // 删除文件
     public static function deleteFile($filepath)
     {
         // 获取插件配置
         $option = self::getConfig();
 
-        // 初始化 SDK
-        self::initSDK($option->accesskey, $option->sercetkey);
+        $auth = new Auth($option->accesskey, $option->secretkey);
+        $bucketManager = new BucketManager($auth);
 
         // 删除
-        $client = new Qiniu_MacHttpClient(null);
-        return Qiniu_RS_Delete($client, $option->bucket, $filepath);
+        return $bucketManager->delete($option->bucket, $filepath);
     }
 
 
@@ -115,17 +110,13 @@ class QiniuFile_Plugin implements Typecho_Plugin_Interface
         $filename = $file['tmp_name'];
         if (!isset($filename)) return false;
 
-        // 初始化 SDK
-        self::initSDK($option->accesskey, $option->sercetkey);
-
         // 上传凭证
-        $policy = new Qiniu_RS_PutPolicy($option->bucket);
-        $token = $policy->Token(null);
-        $extra = new Qiniu_PutExtra();
-        $extra->Crc32 = 1;
+        $auth = new Auth($option->accesskey, $option->secretkey);
+        $token = $auth->uploadToken($option->bucket);
+        $uploadManager = new UploadManager();
 
         // 上传
-        list($result, $error) = Qiniu_PutFile($token, $savename, $filename, $extra);
+        list($result, $error) = $uploadManager->putFile($token, $savename, $filename);
         if ($error == null)
         {
             return array
