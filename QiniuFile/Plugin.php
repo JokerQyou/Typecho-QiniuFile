@@ -4,7 +4,7 @@
  * 
  * @package Qiniu File
  * @author abelyao
- * @version 1.2.0
+ * @version 1.2.1
  * @link http://www.abelyao.com/
  * @date 2014-02-22
  */
